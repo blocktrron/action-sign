@@ -1,0 +1,126 @@
+---
+# yamllint disable rule:line-length
+name: "Tests"
+
+# yamllint disable-line rule:truthy
+on: [push, pull_request]
+
+env:
+  ACTION_SIGNING_KEY_VALID: >-
+    705fcde17e1ef047bff686a5972028f9d1eb63b9db2a7cf493e3cf53a39f1d56
+  ACTION_SIGNING_KEY_INVALID: >-
+    705fcde17e1ef047bff
+
+jobs:
+  test-valid-writeback:
+    name: "valid-manifest-valid-key-writeback"
+    runs-on: ubuntu-22.04
+    env:
+      ACTION_SIGNATURE_VALID: >-
+        4ea72551d2cb204d66a5f6cd64b1b47eb0f5307f17d0d8cf3a9bc4a55039cc0f69309750aad3e8bd8c70d96d5814a8cdfda03e3d6b2e964ddb71bf6ec719bd08
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout Gluon
+        uses: actions/checkout@v4
+        with:
+          repository: freifunk-gluon/gluon
+          path: gluon-repo
+      - name: Sign Valid
+        id: signature-output
+        uses: "./"
+        with:
+          gluon-path: gluon-repo
+          manifest: tests/valid.manifest
+          signing-key: ${{ env.ACTION_SIGNING_KEY_VALID }}
+          write-signature: true
+      - name: Check writeback Signature
+        run: |
+          if [ "$(tail -n1 ./tests/valid.manifest)" != "$ACTION_SIGNATURE_VALID" ]; then
+            echo "Signature does not match"
+            exit 1
+          fi
+      - name: Check output Signature
+        env:
+          ACTION_SIGNATURE_OUTPUT: ${{ steps.signature-output.outputs.signature }}
+        run: |
+          if [ "$ACTION_SIGNATURE_OUTPUT" != "$ACTION_SIGNATURE_VALID" ]; then
+            echo "Signature does not match"
+            exit 1
+          fi
+
+  test-valid-no-writeback:
+    name: "valid-manifest-valid-key-no-writeback"
+    runs-on: ubuntu-22.04
+    env:
+      ACTION_SIGNATURE_VALID: >-
+        4ea72551d2cb204d66a5f6cd64b1b47eb0f5307f17d0d8cf3a9bc4a55039cc0f69309750aad3e8bd8c70d96d5814a8cdfda03e3d6b2e964ddb71bf6ec719bd08
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout Gluon
+        uses: actions/checkout@v4
+        with:
+          repository: freifunk-gluon/gluon
+          path: gluon-repo
+      - name: Sign Valid
+        id: signature-output
+        uses: "./"
+        with:
+          gluon-path: gluon-repo
+          manifest: tests/valid.manifest
+          signing-key: ${{ env.ACTION_SIGNING_KEY_VALID }}
+          write-signature: true
+      - name: Check writeback Signature
+        run: |
+          if ! grep -q "$ACTION_SIGNATURE_VALID" ./tests/valid.manifest; then
+            echo "Signature contained in output file"
+            exit 1
+          fi
+      - name: Check output Signature
+        env:
+          ACTION_SIGNATURE_OUTPUT: ${{ steps.signature-output.outputs.signature }}
+        run: |
+          if [ "$ACTION_SIGNATURE_OUTPUT" != "$ACTION_SIGNATURE_VALID" ]; then
+            echo "Signature does not match"
+            exit 1
+          fi
+
+  test-invalid-writeback:
+    name: "valid-manifest-invalid-key-writeback"
+    runs-on: ubuntu-22.04
+    env:
+      ACTION_SIGNATURE_VALID: >-
+        4ea72551d2cb204d66a5f6cd64b1b47eb0f5307f17d0d8cf3a9bc4a55039cc0f69309750aad3e8bd8c70d96d5814a8cdfda03e3d6b2e964ddb71bf6ec719bd08
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Checkout Gluon
+        uses: actions/checkout@v4
+        with:
+          repository: freifunk-gluon/gluon
+          path: gluon-repo
+      - name: Save Manifest
+        id: manifest-sha256
+        run: echo "manifest-sha256=$(sha256sum tests/valid.manifest | cut -d " " -f 1 )" > $GITHUB_OUTPUT && cat $GITHUB_OUTPUT
+      - name: Sign Valid
+        id: signature-output
+        continue-on-error: true
+        uses: "./"
+        with:
+          gluon-path: gluon-repo
+          manifest: tests/valid.manifest
+          signing-key: ${{ env.ACTION_SIGNING_KEY_INVALID }}
+          write-signature: true
+      - name: Check signature step failed
+        run: |
+          if [ ${{ steps.signature-output.outcome }} != "failure" ]; then
+            echo "Signature step did not fail"
+            exit 1
+          fi
+      - name: Check writeback Signature
+        run: |
+          if [ "$(sha256sum tests/valid.manifest | cut -d " " -f 1 )" != "${{ steps.manifest-sha256.outputs.manifest-sha256 }}" ]; then
+            echo "Signature does not match"
+            exit 1
+          fi

@@ -1,0 +1,34 @@
+---
+name: "Lint"
+
+# yamllint disable-line rule:truthy
+on: [push, pull_request]
+
+jobs:
+  lint-yaml:
+    name: "YAML"
+    runs-on: ubuntu-22.04
+    env:
+      YAML_FILES: |
+        .github/workflows/build.yml
+        .github/workflows/lint.yml
+        .github/workflows/test.yml
+        action.yml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y yamllint shellcheck
+      - name: Validate YAML Files
+        run: yamllint $YAML_FILES
+
+  shellcheck:
+    name: "Shell Scripts"
+    runs-on: ubuntu-22.04
+    env:
+      SHELL_FILES: entrypoint.sh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Validate Shell Scripts
+        run: shellcheck $SHELL_FILES
